@@ -1,0 +1,45 @@
+[project]
+name = "agrosense"
+version = "0.1.0"
+description = "Aplicación móvil AgroSense para medición agrícola"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "flet",
+  "flet-camera",
+  "flet-permission-handler",
+  "bleak"
+]
+
+[tool.flet]
+org = "com.agrosense"
+product = "AgroSense"
+company = "AgroSense"
+permissions = ["camera"]
+
+[tool.flet.app]
+path = "."
+
+[tool.flet.android]
+min_sdk_version = 24
+dependencies = [
+  "flet-camera",
+  "flet-permission-handler",
+  "bleak",
+  "pyjnius"
+]
+
+[tool.flet.android.permission]
+"android.permission.CAMERA" = true
+"android.permission.READ_MEDIA_IMAGES" = true
+"android.permission.READ_EXTERNAL_STORAGE" = true
+"android.permission.WRITE_EXTERNAL_STORAGE" = true
+"android.permission.BLUETOOTH" = true
+"android.permission.BLUETOOTH_ADMIN" = true
+"android.permission.BLUETOOTH_SCAN" = true
+"android.permission.BLUETOOTH_CONNECT" = true
+"android.permission.ACCESS_COARSE_LOCATION" = true
+"android.permission.ACCESS_FINE_LOCATION" = true
+
+[tool.flet.android.feature]
+"android.hardware.bluetooth_le" = true

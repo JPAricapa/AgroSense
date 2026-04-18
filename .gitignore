@@ -1,0 +1,20 @@
+# Build
+build/
+
+# Base de datos local
+services/.agroprecision/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Archivos temporales de Flet (sockets, PID)
+35iNWmCScaHSQgGQ9N1u
+
+# IDE
+.idea/
+.vscode/
+*.swp
