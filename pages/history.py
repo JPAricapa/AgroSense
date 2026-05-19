@@ -1,3 +1,11 @@
+"""
+Historial de mediciones.
+
+Muestra mediciones guardadas en SQLite. Si hay una finca seleccionada, filtra
+solo esa finca; si se entra desde conexion, agrupa por finca y permite exportar
+solo las fincas marcadas.
+"""
+
 import flet as ft
 import csv
 import json
@@ -38,6 +46,7 @@ EXPORT_COLUMNS = [
 
 
 def get_values(data):
+    """Extrae valores en el mismo orden usado por tablas y CSV."""
     s7 = data.get("sensors_7in1", {})
     am = data.get("am2315c", {})
     return [
@@ -54,6 +63,7 @@ def get_values(data):
 
 
 def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
+    """Construye historial, detalle de medicion y exportacion CSV."""
     page.title = "AgroSense - Historial"
 
     bg         = "#0D1B2A" if is_dark else "#F0F2F5"
@@ -85,12 +95,14 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         pass
 
     def show_export_status(text: str, color: str):
+        """Muestra el resultado de la exportacion o validaciones."""
         export_status.value = text
         export_status.color = color
         export_status.visible = True
         page.update()
 
     def build_image_src(image_value):
+        """Convierte imagen guardada a un src que Flet pueda mostrar."""
         if not image_value:
             return None
         if isinstance(image_value, str) and image_value.startswith("data:image/"):
@@ -98,6 +110,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         return f"data:image/jpeg;base64,{image_value}"
 
     def close_button(label: str, on_click):
+        """Crea botones de cierre con estilo consistente."""
         return ft.Button(
             label,
             icon=ft.Icons.CLOSE,
@@ -111,6 +124,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
 
     def show_image_dialog(src):
+        """Abre una imagen de medicion en vista ampliada."""
         def close_big(_=None):
             page.pop_dialog()
 
@@ -132,7 +146,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
             )
         )
 
-    # ── Diálogo de detalle ────────────────────────────────────────────────────
+    # Dialogo de detalle con foto, tabla de sensores y opcion de borrar.
     def open_detail_dialog(mid, vals, imagen, fecha, hora):
         _short = {0: "Temperatura", 1: "Humedad", 7: "Temperatura", 8: "Humedad"}
 
@@ -318,7 +332,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
         page.show_dialog(dialog)
 
-    # ── Card compacta ─────────────────────────────────────────────────────────
+    # Card compacta que resume una medicion dentro del historial.
     def hacer_card(mid, fecha, hora, vals, imagen):
         image_src = build_image_src(imagen)
 
@@ -414,6 +428,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
 
     def parse_measurement_row(row):
+        """Convierte una fila SQLite en datos listos para pintar."""
         mid, timestamp, sensor_json, imagen = row
 
         try:
@@ -433,15 +448,18 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         return mid, fecha, hora, vals, imagen
 
     def finca_key(finca_id, finca_nombre_item):
+        """Crea una llave estable incluso para mediciones sin finca."""
         return finca_id if finca_id is not None else f"sin_finca:{finca_nombre_item}"
 
     def build_finca_section(key, finca_nombre_item, rows, expanded=False):
+        """Construye una seccion desplegable con checkbox para exportar."""
         cards = []
         for row in rows:
             mid, fecha, hora, vals, imagen = parse_measurement_row(row)
             cards.append(hacer_card(mid, fecha, hora, vals, imagen))
 
         def on_select_finca(e):
+            # El CSV general solo incluye las fincas marcadas por el usuario.
             if e.control.value:
                 selected_finca_keys.add(key)
             else:
@@ -490,6 +508,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
 
     async def export_csv():
+        """Genera y comparte un CSV con la finca actual o las seleccionadas."""
         all_rows_with_finca = get_all_measurements_with_finca() if viewing_all else []
         if viewing_all:
             if not selected_finca_keys:
@@ -521,6 +540,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         target_path = str(export_dir / file_name)
 
         def format_num(value, decimals=2):
+            """Formatea numeros del CSV sin romperse con valores vacios."""
             try:
                 return f"{float(value):.{decimals}f}"
             except (TypeError, ValueError):
@@ -583,7 +603,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         except Exception as ex:
             show_export_status(f"No se pudo abrir compartir: {ex}", "#FF9800")
 
-    # ── Header ────────────────────────────────────────────────────────────────
+    # Header con regreso, desconexion si aplica y finca actual.
     header = ft.Container(
         content=ft.Row(
             [
@@ -661,6 +681,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     content_col = ft.Column([], spacing=8)
 
     def do_load():
+        """Carga mediciones desde SQLite y reconstruye el contenido."""
         rows = get_all_measurements_with_finca() if viewing_all else get_measurements_by_finca(selected_finca_id)
         content_col.controls.clear()
 
@@ -710,7 +731,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
 
         page.update()
 
-    # ── Layout ────────────────────────────────────────────────────────────────
+    # Layout final con scroll para celulares pequenos.
     scroll_col = ft.Column(
         [header, export_controls, ft.Container(height=8), content_col],
         spacing=0,

@@ -1,7 +1,16 @@
+"""
+Dashboard de medicion en tiempo real.
+
+Esta pantalla recibe los datos ya convertidos por BLEService, actualiza las
+tarjetas de sensores y habilita el boton de guardar cuando existe una lectura
+valida.
+"""
+
 import flet as ft
 from datetime import datetime
 
 
+# Orden de visualizacion de sensores. Los indices coinciden con get_values().
 SENSOR_LABELS = [
     ("Temperatura", "C", "#EF5350"),
     ("Humedad", "%", "#26A69A"),
@@ -17,6 +26,7 @@ SENSOR_LABELS = [
 
 
 def get_values(data):
+    """Extrae los valores numericos desde la estructura interna de sensores."""
     s7 = data.get("sensors_7in1", {})
     am = data.get("am2315c", {})
     return [
@@ -33,6 +43,7 @@ def get_values(data):
 
 
 def _format_number(value):
+    """Da formato de dos decimales y evita errores si llega un valor vacio."""
     try:
         return f"{float(value):.2f}"
     except (TypeError, ValueError):
@@ -40,6 +51,7 @@ def _format_number(value):
 
 
 def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, ble=None):
+    """Construye el panel principal de lectura de sensores."""
     page.title = "AgroSense - Dashboard"
     bg = "#0D1B2A" if is_dark else "#F0F2F5"
     card_bg = "#1B263B" if is_dark else "#FFFFFF"
@@ -55,6 +67,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
     _ble_connected = bool(state.get("ble_mode", False) and ble is not None)
 
     def _update_save_button_visibility():
+        """Activa Guardar solo cuando ya llego al menos una medicion."""
         if save_btn is None:
             return
         has_data = bool(state.get("ready_to_save") and state.get("current_data"))
@@ -62,6 +75,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
         save_btn.opacity = 1.0 if has_data else 0.45
 
     def _format_timestamp(ts: str) -> str:
+        """Convierte la fecha ISO recibida a un texto legible."""
         if not ts:
             return ""
         try:
@@ -73,6 +87,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
             return ""
 
     def _update_cards(data):
+        """Actualiza estado, tarjetas y fecha con la ultima lectura."""
         state["current_data"] = data
         state["measured"] = True
         state["ready_to_save"] = True
@@ -84,7 +99,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
         timestamp_text.value = _format_timestamp(data.get("timestamp", ""))
         _update_save_button_visibility()
 
-    # ── Datos BLE reales ──────────────────────────────────────────────────────
+    # Datos BLE reales: se ejecuta cada vez que llega una notificacion.
     def _on_ble_data(data_dict):
         _update_cards(data_dict)
         status_text.value = "Recibiendo datos BLE..."
@@ -95,7 +110,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
     if _ble_connected and ble is not None:
         ble.on_data = _on_ble_data
 
-    # ── Header ────────────────────────────────────────────────────────────────
+    # Header con navegacion, historial, desconexion y nombre de finca.
     def go_to_configuration(_):
         if ble is not None:
             ble.on_data = None
@@ -210,6 +225,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
     shadow_color = "#00000033" if is_dark else "#00000012"
 
     def build_measure_group(title: str, icon, rows):
+        """Agrupa tarjetas de sensores por ambiente o suelo."""
         return ft.Container(
             content=ft.Column(
                 [
@@ -271,6 +287,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
     )
 
     def do_save(_):
+        """Abre guardado solo si ya existe una medicion recibida."""
         if state.get("current_data"):
             navigate("/save")
         else:

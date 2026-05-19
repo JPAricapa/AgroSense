@@ -1,3 +1,11 @@
+"""
+Pantalla de configuracion del equipo.
+
+Permite elegir cada cuantos segundos se enviaran datos por BLE y cuantos
+minutos debe esperar el firmware antes de entrar en hibernacion cuando la CE
+queda en cero.
+"""
+
 import asyncio
 
 import flet as ft
@@ -16,6 +24,7 @@ def build(
     disconnect_ble,
     ble: BLEService | None = None,
 ):
+    """Dibuja los controles de configuracion y los envia al firmware."""
     page.title = "AgroSense - Configuración"
 
     bg = "#0D1B2A" if is_dark else "#F0F4F8"
@@ -27,6 +36,7 @@ def build(
     page.controls.clear()
 
     def _state_optional_int(key: str) -> int | None:
+        """Lee un entero del estado compartido y tolera valores vacios."""
         try:
             value = state.get(key)
             if value in (None, ""):
@@ -55,6 +65,7 @@ def build(
     )
 
     def update_resume():
+        """Actualiza el resumen visible de la configuracion escogida."""
         sample_interval = state["sample_interval_seconds"]
         hibernate_value = state["hibernate_minutes"]
 
@@ -71,6 +82,7 @@ def build(
         )
 
     def on_interval_change(e):
+        """Guarda en memoria el intervalo elegido por el usuario."""
         value = e.control.value
         try:
             state["sample_interval_seconds"] = (
@@ -82,6 +94,7 @@ def build(
         page.update()
 
     def on_hibernate_change(e):
+        """Guarda en memoria el tiempo de hibernacion elegido."""
         value = e.control.value
         try:
             state["hibernate_minutes"] = (
@@ -93,6 +106,7 @@ def build(
         page.update()
 
     async def go_back(_):
+        """Envia la configuracion al ESP32 antes de regresar a fincas."""
         interval = state.get("sample_interval_seconds")
         hibernate = state.get("hibernate_minutes")
 

@@ -1,3 +1,10 @@
+"""
+Pantalla para revisar y guardar una medicion.
+
+Muestra la ultima lectura recibida, permite tomar o seleccionar una foto del
+cultivo y guarda todo en SQLite asociado a la finca activa.
+"""
+
 import asyncio
 import base64
 import json
@@ -22,6 +29,7 @@ SENSOR_TABLE = [
 
 
 def get_values(data):
+    """Ordena los sensores para mostrarlos en tabla y guardarlos igual."""
     s7 = data.get("sensors_7in1", {})
     am = data.get("am2315c", {})
     return [
@@ -38,6 +46,7 @@ def get_values(data):
 
 
 def format_value(value):
+    """Convierte valores de sensores a texto de dos decimales."""
     try:
         return f"{float(value):.2f}"
     except (TypeError, ValueError):
@@ -45,6 +54,7 @@ def format_value(value):
 
 
 def _clear_file_pickers(page: ft.Page):
+    """Elimina file pickers antiguos para no duplicar servicios Flet."""
     try:
         page.services[:] = [s for s in page.services if not isinstance(s, ft.FilePicker)]
     except Exception:
@@ -52,6 +62,7 @@ def _clear_file_pickers(page: ft.Page):
 
 
 def _clear_permission_handlers(page: ft.Page):
+    """Elimina handlers de permisos antiguos antes de montar otro."""
     try:
         page.services[:] = [
             s for s in page.services
@@ -62,20 +73,26 @@ def _clear_permission_handlers(page: ft.Page):
 
 
 class ManagedCamera(fc.Camera):
+    """Camara con bandera de montaje para evitar capturar antes de estar lista."""
+
     def __init__(self, **kwargs):
+        """Inicializa la camara marcandola como no montada."""
         super().__init__(**kwargs)
         self.is_mounted = False
 
     def did_mount(self):
+        """Flet llama esto cuando la camara ya esta en la pagina."""
         self.is_mounted = True
         super().did_mount()
 
     def will_unmount(self):
+        """Flet llama esto cuando la camara sale de la pagina."""
         self.is_mounted = False
         super().will_unmount()
 
 
 def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
+    """Construye revision de medicion, foto opcional y guardado final."""
     page.title = "AgroSense - Medidas Tomadas"
     page.controls.clear()
     _clear_file_pickers(page)
@@ -105,6 +122,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     permission_handler = [None]
 
     def mount_permission_handler(force_recreate: bool = False):
+        """Monta permisos de camara cuando la app corre en movil."""
         if not _is_mobile:
             return None
 
@@ -124,12 +142,13 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
             return None
 
     def safe_update():
+        """Actualiza la UI evitando que un dialogo cerrado genere excepciones."""
         try:
             page.update()
         except Exception:
             pass
 
-    # ── Header ────────────────────────────────────────────────────────────────
+    # Header con regreso al dashboard, desconexion y finca activa.
     header = ft.Container(
         content=ft.Row(
             [
@@ -182,7 +201,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         border_radius=10,
     )
 
-    # ── Preview de imagen ─────────────────────────────────────────────────────
+    # Preview de imagen: se muestra solo si hay foto cargada o tomada.
     foto_preview = ft.Container(
         content=ft.Image(
             src="",
@@ -200,6 +219,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     msg = ft.Text("", size=13, visible=False)
 
     def open_preview_dialog(_=None):
+        """Abre la imagen en grande para revisar nitidez antes de guardar."""
         if not image_data[0]:
             return
 
@@ -226,7 +246,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
         page.show_dialog(dialog)
 
-    # Container tappable para ampliar la foto
+    # Contenedor tactil para ampliar la foto.
     foto_tap = ft.Container(
         content=ft.Stack(
             controls=[
@@ -257,9 +277,10 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     )
 
     def process_image_bytes(img_bytes):
+        """Convierte bytes de imagen a base64 para guardar y mostrar."""
         b64 = base64.b64encode(img_bytes).decode("utf-8")
         image_data[0] = f"data:image/jpeg;base64,{b64}"
-        # Actualizar la imagen dentro del Stack
+        # Actualiza la imagen dentro del Stack.
         foto_tap.content.controls[0].src = image_data[0]
         foto_tap.visible = True
         foto_status.value = "Imagen: Sí  (toca para ampliar)"
@@ -270,6 +291,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         safe_update()
 
     def show_error(text: str):
+        """Muestra errores de imagen, permisos o camara en la pantalla."""
         foto_status.value = text
         foto_status.color = "#F44336"
         msg.value = text
@@ -278,6 +300,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         safe_update()
 
     def close_camera():
+        """Cierra el dialogo de camara y libera la referencia al control."""
         current_camera[0] = None
         dialog = current_dialog[0]
         current_dialog[0] = None
@@ -292,6 +315,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                     pass
 
     async def wait_for_camera_mount(camera: ManagedCamera):
+        """Espera a que Flet monte la camara antes de llamar capture()."""
         for _ in range(40):
             if camera.is_mounted:
                 try:
@@ -303,6 +327,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         return False
 
     async def open_gallery():
+        """Abre galeria y carga una imagen seleccionada por el usuario."""
         files = await picker.pick_files(
             allow_multiple=False,
             dialog_title="Seleccionar foto del cultivo",
@@ -332,6 +357,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         show_error("No se pudo leer la imagen seleccionada")
 
     async def open_camera():
+        """Pide permiso de camara y abre el preview para tomar la foto."""
         if page.platform not in (ft.PagePlatform.ANDROID, ft.PagePlatform.IOS):
             raise RuntimeError("La cámara directa solo está soportada en Android o iOS")
 
@@ -452,6 +478,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         safe_update()
 
     async def tomar_foto(_):
+        """Intenta usar camara; si falla, abre galeria como respaldo."""
         try:
             await open_camera()
         except Exception as ex:
@@ -460,7 +487,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
             except Exception:
                 show_error(f"No se pudo abrir la cámara: {ex}")
 
-    # ── Tabla de sensores ─────────────────────────────────────────────────────
+    # Tabla de sensores que resume la lectura antes de guardarla.
     data = state.get("current_data")
     vals = get_values(data) if data else [0] * 9
 
@@ -522,6 +549,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     )
 
     def do_save(_):
+        """Valida finca y datos, guarda la medicion y abre el historial."""
         if not state.get("current_data"):
             msg.value = "No hay datos para guardar"
             msg.color = "#F44336"

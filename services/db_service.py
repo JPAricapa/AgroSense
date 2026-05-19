@@ -1,9 +1,18 @@
+"""
+Servicio de base de datos local de AgroSense.
+
+SQLite guarda las fincas y las mediciones dentro del dispositivo. En Android se
+usa el directorio interno de la app; en escritorio se crea una carpeta local
+services/.agroprecision/ para facilitar las pruebas.
+"""
+
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
 
 def _get_app_dir() -> Path:
+    """Calcula una ruta escribible tanto en Android como en escritorio."""
     module_path = Path(__file__).resolve()
     parts = module_path.parts
     if "files" in parts:
@@ -18,6 +27,7 @@ DB_PATH = str(APP_DIR / "measurements.db")
 
 
 def init_db():
+    """Crea las tablas si no existen antes de abrir cualquier pantalla."""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS fincas (
@@ -43,6 +53,7 @@ def init_db():
 
 
 def get_all_fincas():
+    """Lista todas las fincas creadas por el usuario."""
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute("SELECT id, nombre FROM fincas ORDER BY id").fetchall()
     conn.close()
@@ -50,6 +61,7 @@ def get_all_fincas():
 
 
 def create_finca(nombre: str):
+    """Crea una finca nueva; devuelve False si el nombre ya existe."""
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.execute("INSERT INTO fincas (nombre, es_fija) VALUES (?, 0)", (nombre.strip(),))
@@ -62,6 +74,7 @@ def create_finca(nombre: str):
 
 
 def delete_finca(finca_id: int):
+    """Elimina una finca y sus mediciones asociadas."""
     conn = sqlite3.connect(DB_PATH)
     es_fija = conn.execute("SELECT es_fija FROM fincas WHERE id = ?", (finca_id,)).fetchone()
     if es_fija and es_fija[0] == 1:
@@ -75,6 +88,7 @@ def delete_finca(finca_id: int):
 
 
 def save_measurement(finca_id, sensor_json, imagen=None):
+    """Guarda una medicion con finca, fecha, datos JSON e imagen opcional."""
     try:
         finca_id = int(finca_id)
     except (TypeError, ValueError):
@@ -91,6 +105,7 @@ def save_measurement(finca_id, sensor_json, imagen=None):
 
 
 def get_measurements_by_finca(finca_id):
+    """Consulta mediciones de una finca especifica, de la mas reciente a la mas antigua."""
     try:
         finca_id = int(finca_id)
     except (TypeError, ValueError):
@@ -108,6 +123,7 @@ def get_measurements_by_finca(finca_id):
 
 
 def get_all_measurements():
+    """Consulta todas las mediciones sin agrupar por finca."""
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute("""
         SELECT id, timestamp, sensor_json, imagen
@@ -119,6 +135,7 @@ def get_all_measurements():
 
 
 def get_all_measurements_with_finca():
+    """Consulta todas las mediciones incluyendo el nombre de la finca."""
     conn = sqlite3.connect(DB_PATH)
     rows = conn.execute("""
         SELECT
@@ -137,6 +154,7 @@ def get_all_measurements_with_finca():
 
 
 def delete_measurement(mid: int):
+    """Borra una medicion individual desde el historial."""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("DELETE FROM measurements WHERE id = ?", (mid,))
     conn.commit()

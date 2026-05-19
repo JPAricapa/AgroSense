@@ -1,3 +1,10 @@
+"""
+Pantalla inicial de conexion BLE.
+
+Desde aqui el usuario puede conectar el ESP32 por Bluetooth o abrir el historial
+local sin conectarse al dispositivo. Tambien se piden permisos BLE en Android.
+"""
+
 import asyncio
 import flet as ft
 import flet_permission_handler as ph
@@ -7,6 +14,7 @@ ACCENT = "#4CAF50"
 
 
 def _clear_permission_handlers(page: ft.Page):
+    """Evita acumular handlers de permisos cuando se vuelve a esta pantalla."""
     try:
         page.services[:] = [
             s for s in page.services
@@ -17,6 +25,7 @@ def _clear_permission_handlers(page: ft.Page):
 
 
 def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
+    """Construye la vista de bienvenida, conexion e historial."""
     page.title = "AgroSense"
 
     bg = "#0D1B2A" if is_dark else "#F0F4F8"
@@ -29,6 +38,7 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
     _clear_permission_handlers(page)
 
     pending_notice = state.pop("_ble_notice", None)
+    # El aviso pendiente se usa cuando el firmware desconecta o entra en reposo.
     status_label = ft.Text(
         pending_notice or "Esperando conexión...",
         size=13,
@@ -45,6 +55,7 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
     permission_handler = [None]
 
     def is_permission_handler_ready(handler) -> bool:
+        """Comprueba que el control de permisos ya esta montado en Flet."""
         if handler is None:
             return False
         try:
@@ -54,6 +65,7 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
             return False
 
     def mount_permission_handler(force_recreate: bool = False):
+        """Monta el servicio de permisos solo en celular."""
         if not _is_mobile:
             return None
 
@@ -78,6 +90,7 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
             return None
 
     async def ensure_permission_handler_ready(force_recreate: bool = False):
+        """Espera hasta que Android deje pedir permisos desde el handler."""
         handler = mount_permission_handler(force_recreate=force_recreate)
         if handler is None:
             return None
@@ -94,6 +107,7 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
         return None
 
     def on_status(status: str):
+        """Actualiza textos e iconos segun el estado enviado por BLEService."""
         if status == "searching":
             status_label.value = "Buscando dispositivo BLE..."
             status_label.color = sub
@@ -127,6 +141,7 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
     state["_ble_status_handler"] = on_status
 
     async def connect_ble_with_permissions():
+        """Pide permisos Android y luego inicia la conexion BLE."""
         try:
             handler = await ensure_permission_handler_ready()
             if handler is not None:
@@ -173,9 +188,11 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
             page.update()
 
     def on_connect_click(_):
+        # Flet ejecuta la corrutina sin bloquear la interfaz.
         page.run_task(connect_ble_with_permissions)
 
     def on_history_click(_):
+        # Historial general: no hay finca seleccionada, por eso muestra todas.
         state["finca_id"] = None
         state["finca_nombre"] = None
         navigate("/history")

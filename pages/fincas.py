@@ -1,8 +1,16 @@
+"""
+Pantalla de fincas.
+
+Administra las fincas guardadas en SQLite y define a cual finca se asociara la
+siguiente medicion tomada desde el dashboard.
+"""
+
 import flet as ft
 from services.db_service import get_all_fincas, create_finca, delete_finca
 
 
 def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
+    """Construye listado, creacion, seleccion y borrado de fincas."""
     bg = "#0D1B2A" if is_dark else "#F0F2F5"
     card_bg = "#1B263B" if is_dark else "#FFFFFF"
     text_color = "#E0E1DD" if is_dark else "#1B263B"
@@ -80,10 +88,12 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     )
 
     def cerrar_dialogo(e=None):
+        """Cierra el dialogo de creacion sin guardar cambios."""
         crear_dialog.open = False
         page.update()
 
     def abrir_dialogo(e=None):
+        """Prepara el formulario para crear una finca nueva."""
         new_name_field.value = ""
         new_name_field.border_color = border_col
         dialog_msg.value = ""
@@ -94,6 +104,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         page.update()
 
     def guardar_finca(e=None):
+        """Valida el nombre y lo guarda en la base de datos."""
         nombre = (new_name_field.value or "").strip()
         if not nombre:
             new_name_field.border_color = "#F44336"
@@ -133,11 +144,13 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     fincas_col = ft.Column([], spacing=8)
 
     def seleccionar_finca(fid, fname):
+        """Guarda la finca activa en el estado y abre el dashboard."""
         state["finca_id"] = fid
         state["finca_nombre"] = fname
         navigate("/dashboard")
 
     def confirm_delete_finca(fid, fname):
+        """Muestra confirmacion antes de borrar finca y mediciones."""
         def do_delete(_):
             page.pop_dialog()
             delete_finca(fid)
@@ -174,6 +187,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
 
     def hacer_tarjeta(fid, fname, is_created):
+        """Crea la tarjeta visual de una finca existente."""
         selected = state.get("finca_id") == fid
         current_bg = selected_bg if selected else card_bg
         current_border = accent if selected else border_col
@@ -229,6 +243,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
 
     def hacer_agregar():
+        """Crea la tarjeta usada para abrir el formulario de finca nueva."""
         return ft.Container(
             content=ft.Column(
                 [
@@ -269,6 +284,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
         )
 
     def do_load():
+        """Lee fincas desde SQLite y reconstruye la grilla de tarjetas."""
         fincas = get_all_fincas()
         fincas_col.controls.clear()
 

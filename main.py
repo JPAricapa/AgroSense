@@ -1,3 +1,12 @@
+"""
+Punto de entrada de la app AgroSense.
+
+Este archivo crea la ventana Flet, mantiene el estado compartido de la
+aplicacion y decide que pantalla se muestra segun la ruta actual. Las pantallas
+estan separadas en la carpeta pages/ y los servicios externos estan en
+services/.
+"""
+
 import flet as ft
 import subprocess
 import os
@@ -8,6 +17,8 @@ from pages import connection, fincas, dashboard, save, history, configuration
 
 init_db()
 
+# Estado compartido entre pantallas. Cada pantalla lee o actualiza estas llaves
+# para saber si hay finca seleccionada, datos medidos o conexion BLE activa.
 _state = {
     "current_data": None,
     "measured": False,
@@ -22,11 +33,14 @@ _state = {
     "_disconnect_requested": False,
     "_ble_notice": None,
 }
+# Servicio BLE unico para toda la app. Se comparte para no abrir varias
+# conexiones al mismo ESP32.
 _ble = BLEService()
 _is_dark = [True]
 
 
 def _is_android_runtime():
+    """Detecta si la app corre dentro de Android o en escritorio."""
     return (
         sys.platform == "android"
         or hasattr(sys, "getandroidapilevel")
@@ -37,6 +51,7 @@ def _is_android_runtime():
 
 
 def get_system_theme():
+    """Devuelve True para modo oscuro y False para modo claro."""
     if _is_android_runtime() or sys.platform != "linux":
         return True
 
@@ -64,6 +79,7 @@ def get_system_theme():
 
 
 def main(page: ft.Page):
+    """Configura la pagina principal y conecta la navegacion de la app."""
     page.title = "AgroSense"
     page.theme_mode = ft.ThemeMode.SYSTEM
     page.window_maximized = False
@@ -75,17 +91,20 @@ def main(page: ft.Page):
     page.bgcolor = "#0D1B2A" if _is_dark[0] else "#F0F2F5"
 
     def _normalize_route(route: str | None) -> str:
+        # Flet acepta rutas con o sin slash; se normalizan para comparar facil.
         if not route:
             return "/connection"
         return route if route.startswith("/") else "/" + route
 
     def toggle_theme():
+        # Cambia tema y vuelve a dibujar la pantalla actual.
         _is_dark[0] = not _is_dark[0]
         page.theme_mode = ft.ThemeMode.DARK if _is_dark[0] else ft.ThemeMode.LIGHT
         page.bgcolor = "#0D1B2A" if _is_dark[0] else "#F0F2F5"
         render_route(page.route)
 
     def _reset_measurement_state(clear_finca: bool = False):
+        # Limpia datos temporales de medicion sin borrar la base de datos.
         _state["ble_mode"] = False
         _state["current_data"] = None
         _state["measured"] = False
@@ -97,6 +116,7 @@ def main(page: ft.Page):
             _state["finca_nombre"] = None
 
     def _handle_ble_status(status: str):
+        # Recibe eventos del servicio BLE y los traduce a navegacion o avisos.
         handler = _state.get("_ble_status_handler")
         if callable(handler):
             try:
@@ -105,12 +125,14 @@ def main(page: ft.Page):
                 pass
 
         if status == "connected":
+            # Al conectar, el flujo normal continua hacia seleccion de finca.
             _state["ble_mode"] = True
             if _state.get("_current_route") == "/connection":
                 navigate("/fincas")
             return
 
         if status == "disconnected":
+            # Una desconexion no solicitada se muestra como aviso al usuario.
             disconnect_requested = bool(_state.get("_disconnect_requested"))
             _state["_disconnect_requested"] = False
             _ble.on_data = None
@@ -126,6 +148,7 @@ def main(page: ft.Page):
             return
 
     def render_route(route: str):
+        # Borra la pantalla actual y construye la vista correspondiente.
         r = _normalize_route(route)
         _state["_current_route"] = r
         _state["_ble_status_handler"] = None
@@ -154,6 +177,7 @@ def main(page: ft.Page):
             connection.build(page, _ble, _state, navigate, _is_dark[0])
 
     def navigate(route: str):
+        # Enrutador simple usado por los botones de cada pantalla.
         r = _normalize_route(route)
         current_route = _normalize_route(page.route or _state.get("_current_route"))
         if r == current_route:
@@ -162,6 +186,7 @@ def main(page: ft.Page):
         page.go(r)
 
     def disconnect_and_go_connection(_=None):
+        # Cierre manual de BLE: vuelve a conexion y limpia finca/datos activos.
         _state["_disconnect_requested"] = True
         _state["_ble_notice"] = None
         try:

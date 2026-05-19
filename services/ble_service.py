@@ -1,9 +1,9 @@
 """
-BLE service for communicating with the ESP32_SENSOR device using bleak.
+Servicio BLE de AgroSense.
 
-Scans for a device named "ESP32_SENSOR", connects, subscribes to
-notifications on characteristic 5678, and maps the incoming JSON
-to the app-internal sensor format.
+Este modulo busca el dispositivo llamado ESP32_SENSOR, se conecta con bleak,
+se suscribe a la caracteristica 5678 y convierte el JSON recibido desde el
+firmware al formato interno que usan las pantallas de la app.
 """
 
 import asyncio
@@ -21,6 +21,7 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 
+# Estos valores deben coincidir con setupBLE() en AgroSense_Firmware.ino.
 SERVICE_UUID = "00001234-0000-1000-8000-00805f9b34fb"
 CHARACTERISTIC_UUID = "00005678-0000-1000-8000-00805f9b34fb"
 DEVICE_NAME = "ESP32_SENSOR"
@@ -31,6 +32,7 @@ class BLEService:
     _last_p4android_error: str | None = None
 
     def __init__(self):
+        # on_data recibe mediciones; on_status informa searching/connected/error.
         self.on_data = None
         self.on_status = None
         self._connected = False
@@ -39,7 +41,7 @@ class BLEService:
         self._disconnecting = False
         self._loop: "asyncio.AbstractEventLoop | None" = None
         self._pending_cleanup_task: "asyncio.Task | None" = None
-        # Buffer for assembling fragmented BLE notifications
+        # Buffer para unir notificaciones BLE cuando el JSON llega fragmentado.
         self._rx_buffer = ""
 
     @staticmethod
@@ -49,11 +51,9 @@ class BLEService:
 
     @staticmethod
     def _patch_pyjnius_for_serious_python() -> None:
-        """Patch jnius.autoclass aliases used by bleak p4android on Flet."""
-        # Pyjnius uses ANDROID_ARGUMENT as an Android runtime marker for some
-        # thread cleanup hooks. Serious Python does not always expose the same
-        # environment as python-for-android, so set a harmless marker before the
-        # first jnius import when running inside the APK.
+        """Ajusta pyjnius para que bleak funcione dentro del APK de Flet."""
+        # Serious Python no expone exactamente el mismo entorno que
+        # python-for-android. Esta marca ayuda a pyjnius a inicializar sus hooks.
         if (
             "ANDROID_ARGUMENT" not in os.environ
             and os.environ.get("ANDROID_ROOT")
@@ -72,7 +72,7 @@ class BLEService:
         original_autoclass = jnius.autoclass
 
         def install_activity_class_loader() -> None:
-            """Make pyjnius proxies visible to Java classes packaged in the APK."""
+            """Hace visibles las clases Java incluidas en el APK."""
             try:
                 thread = original_autoclass("java.lang.Thread").currentThread()
                 python_activity = original_autoclass(
@@ -120,8 +120,7 @@ class BLEService:
         jnius.autoclass = patched_autoclass
         jnius._agroprecision_ble_patch = True
 
-        # Load these classes after the classloader switch so pyjnius dynamic
-        # proxies can implement Bleak's callback interfaces on Android/Flet.
+        # Se precargan clases Java para que bleak reciba callbacks BLE en Android.
         for class_name in (
             "org.jnius.NativeInvocationHandler",
             "com.github.hbldh.bleak.PythonScanCallback",
@@ -136,7 +135,7 @@ class BLEService:
 
     @staticmethod
     def _has_flet_android_activity() -> bool:
-        """Return True when Serious Python exposes the current Android Activity."""
+        """Devuelve True si Serious Python expone la Activity de Android."""
         try:
             import jnius  # type: ignore
 
@@ -149,7 +148,7 @@ class BLEService:
 
     @staticmethod
     def _is_android_runtime() -> bool:
-        """Best-effort Android runtime detection."""
+        """Detecta Android usando varias senales disponibles en APK y escritorio."""
         if sys.platform == "android":
             return True
         if hasattr(sys, "getandroidapilevel"):
@@ -164,7 +163,7 @@ class BLEService:
 
     @classmethod
     def _try_load_p4android_backend(cls) -> tuple[dict, dict]:
-        """Try loading bleak Android backend classes."""
+        """Intenta cargar el backend Android de bleak."""
         scanner_kwargs: dict = {}
         client_kwargs: dict = {}
         cls._last_p4android_error = None
@@ -183,14 +182,14 @@ class BLEService:
         return scanner_kwargs, client_kwargs
 
     def _get_bleak_backend_kwargs(self) -> tuple[dict, dict]:
-        """Return backend kwargs for scanner/client when running on Android."""
+        """Devuelve parametros extra para escaner y cliente BLE en Android."""
         if self._is_android_runtime():
             return self._try_load_p4android_backend()
 
         return {}, {}
 
     def _emit_status(self, status: str) -> None:
-        """Emit BLE status updates on the app loop when possible."""
+        """Emite cambios de estado BLE en el loop de Flet cuando es posible."""
         callback = self.on_status
         if callback is None:
             return
@@ -203,7 +202,7 @@ class BLEService:
         callback(status)
 
     def _reset_connection_state(self, client: "BleakClient | None" = None) -> None:
-        """Clear transient BLE state so a fresh scan can start cleanly."""
+        """Limpia estado temporal para permitir una nueva conexion limpia."""
         self._connected = False
         self._rx_buffer = ""
         if client is None or self._client is client:
@@ -229,7 +228,7 @@ class BLEService:
             logger.debug("Pending BLE cleanup failed", exc_info=True)
 
     async def _cleanup_client(self, client: "BleakClient | None") -> None:
-        """Close a stale BLE client so Android can reconnect without restarting."""
+        """Cierra un cliente BLE anterior para reconectar sin reiniciar la app."""
         if client is None:
             return
 
@@ -254,11 +253,11 @@ class BLEService:
     # connect – callable from sync context (button click)
     # ------------------------------------------------------------------
     def connect(self):
-        """Start an async connection task.
+        """Inicia una tarea asincrona de conexion.
 
-        Works whether or not an asyncio loop is already running:
-        * If a running loop exists (Flet), schedule a task on it.
-        * Otherwise, fall back to ``asyncio.run()``.
+        Funciona con o sin loop asyncio activo:
+        * Si Flet ya tiene loop, crea una tarea.
+        * Si no hay loop, usa ``asyncio.run()``.
         """
         if not _BLEAK_AVAILABLE:
             if self.on_status:
@@ -285,7 +284,7 @@ class BLEService:
     # disconnect
     # ------------------------------------------------------------------
     def disconnect(self):
-        """Disconnect from BLE device (sync-friendly)."""
+        """Desconecta el dispositivo BLE desde codigo sincrono."""
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -304,7 +303,7 @@ class BLEService:
     # send_config
     # ------------------------------------------------------------------
     def send_config(self, interval_ms: int, hibernate_minutes: int = 0):
-        """Send configuration to the ESP32 from sync contexts."""
+        """Envia configuracion al ESP32 desde botones o handlers de Flet."""
         if not self.is_connected:
             logger.warning("send_config called but not connected")
             return
@@ -320,7 +319,7 @@ class BLEService:
             asyncio.run(self.send_config_async(interval_ms, hibernate_minutes))
 
     async def send_config_async(self, interval_ms: int, hibernate_minutes: int = 0) -> bool:
-        """Send configuration to the ESP32 and wait for the write to finish."""
+        """Envia configuracion al ESP32 y espera a que termine la escritura."""
         if not self.is_connected:
             logger.warning("send_config_async called but not connected")
             return False
@@ -332,7 +331,7 @@ class BLEService:
     # Internal async helpers
     # ------------------------------------------------------------------
     async def _connect_async(self):
-        """Scan, connect, and subscribe to notifications."""
+        """Escanea, conecta y se suscribe a notificaciones del ESP32."""
         self._loop = asyncio.get_running_loop()
         self._connecting = True
         try:
@@ -355,7 +354,7 @@ class BLEService:
                     f"(p4android). Detalle: {detail}"
                 )
 
-            # --- scanning ---
+            # Escaneo BLE: busca por nombre para no depender de direcciones MAC.
             self._emit_status("searching")
 
             device = await BleakScanner.find_device_by_name(
@@ -368,7 +367,7 @@ class BLEService:
 
             logger.info("Found device: %s [%s]", device.name, device.address)
 
-            # --- connecting ---
+            # Conexion GATT con callback para detectar desconexiones.
             client = BleakClient(
                 device,
                 disconnected_callback=self._on_disconnect,
@@ -378,7 +377,7 @@ class BLEService:
             self._client = client
             self._connected = True
 
-            # --- subscribe to notifications ---
+            # Suscripcion a notificaciones: aqui llegan las mediciones JSON.
             await client.start_notify(
                 CHARACTERISTIC_UUID, self._notification_handler,
             )
@@ -397,7 +396,7 @@ class BLEService:
             self._connecting = False
 
     async def _disconnect_async(self):
-        """Stop notifications and disconnect."""
+        """Detiene notificaciones y cierra la conexion."""
         client = self._client
         self._disconnecting = True
         try:
@@ -410,7 +409,7 @@ class BLEService:
             self._emit_status("disconnected")
 
     async def _send_config_async(self, payload: str) -> bool:
-        """Write *payload* bytes to the characteristic and report success."""
+        """Escribe el texto de configuracion en la caracteristica BLE."""
         try:
             if self._client and self._client.is_connected:
                 await self._client.write_gatt_char(
@@ -429,7 +428,7 @@ class BLEService:
     # BLE callbacks
     # ------------------------------------------------------------------
     def _on_disconnect(self, client: "BleakClient"):
-        """Called by bleak when the peripheral disconnects unexpectedly."""
+        """Callback llamado por bleak cuando el ESP32 se desconecta."""
         logger.warning("Device disconnected")
         was_disconnect_requested = self._disconnecting
         self._reset_connection_state(client)
@@ -442,11 +441,10 @@ class BLEService:
             self._emit_status("disconnected")
 
     def _notification_handler(self, sender, data: bytearray):
-        """Handle incoming BLE notifications.
+        """Procesa notificaciones BLE entrantes.
 
-        The ESP32 may fragment a single JSON payload across multiple
-        BLE notifications.  We accumulate bytes in ``_rx_buffer`` and
-        attempt to parse whenever a complete JSON object is detected.
+        El ESP32 puede partir un JSON en varias notificaciones. Por eso se
+        acumulan bytes en ``_rx_buffer`` hasta tener un objeto JSON completo.
         """
         try:
             chunk = data.decode("utf-8")
@@ -456,11 +454,11 @@ class BLEService:
 
         self._rx_buffer += chunk
 
-        # Try to extract one or more complete JSON objects
+        # Intenta extraer uno o mas objetos JSON completos del buffer.
         while self._rx_buffer:
             stripped = self._rx_buffer.lstrip()
             if not stripped.startswith("{"):
-                # Discard garbage before the first '{'
+                # Descarta basura antes de la primera llave de apertura.
                 idx = stripped.find("{")
                 if idx == -1:
                     self._rx_buffer = ""
@@ -470,11 +468,11 @@ class BLEService:
 
             try:
                 parsed, end_idx = json.JSONDecoder().raw_decode(self._rx_buffer)
-                # Consume the parsed portion
+                # Consume solo la parte parseada y deja el resto en buffer.
                 self._rx_buffer = self._rx_buffer[end_idx:]
                 self._process_esp_data(parsed)
             except json.JSONDecodeError:
-                # Incomplete JSON – wait for more data
+                # JSON incompleto: espera la siguiente notificacion BLE.
                 break
 
     # ------------------------------------------------------------------
@@ -482,9 +480,9 @@ class BLEService:
     # ------------------------------------------------------------------
     @staticmethod
     def _map_esp_to_app(esp: dict) -> dict:
-        """Map ESP32 JSON to the app-internal sensor data format.
+        """Convierte el JSON del ESP32 al formato interno de la app.
 
-        ESP32 sends:
+        El ESP32 envia:
         {
           "dht": {"t": 25.5, "h": 60.0},
           "sensor7en1": {
@@ -493,7 +491,7 @@ class BLEService:
           }
         }
 
-        App expects:
+        La app espera:
         {
           "timestamp": "ISO-8601",
           "sensors_7in1": { ... },
@@ -521,7 +519,7 @@ class BLEService:
         }
 
     def _process_esp_data(self, esp_json: dict):
-        """Map and deliver a parsed ESP32 payload to the app."""
+        """Entrega una medicion parseada a la pantalla que este escuchando."""
         try:
             mapped = self._map_esp_to_app(esp_json)
             logger.debug("Mapped sensor data: %s", mapped)
