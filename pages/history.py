@@ -3,15 +3,20 @@ import csv
 import json
 from datetime import datetime
 from pathlib import Path
-from services.db_service import APP_DIR, get_measurements_by_finca, delete_measurement
+from services.db_service import (
+    APP_DIR,
+    delete_measurement,
+    get_all_measurements_with_finca,
+    get_measurements_by_finca,
+)
 
 
 SENSOR_TABLE = [
     ("Temp. Suelo", "C"),
     ("Hum. Suelo", "%"),
     ("pH", ""),
-    ("Nitrógeno", "mg/kg"),
-    ("Fósforo", "mg/kg"),
+    ("Nitrogeno", "mg/kg"),
+    ("Fosforo", "mg/kg"),
     ("Potasio", "mg/kg"),
     ("EC", "dS/m"),
     ("Temp. Ambiente", "C"),
@@ -26,8 +31,8 @@ EXPORT_COLUMNS = [
     ("Hum. Suelo (%)", 1),
     ("pH", 2),
     ("EC (dS/m)", 6),
-    ("Nitrógeno (mg/kg)", 3),
-    ("Fósforo (mg/kg)", 4),
+    ("Nitrogeno (mg/kg)", 3),
+    ("Fosforo (mg/kg)", 4),
     ("Potasio (mg/kg)", 5),
 ]
 
@@ -66,8 +71,11 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
 
     page.controls.clear()
 
-    finca_nombre = state.get("finca_nombre", "Sin finca")
+    selected_finca_id = state.get("finca_id")
+    viewing_all = selected_finca_id in (None, "")
+    finca_nombre = state.get("finca_nombre") or "Todas las fincas"
     export_status = ft.Text("", size=11, visible=False)
+    selected_finca_keys = set()
 
     share = ft.Share()
     try:
@@ -380,7 +388,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                                 color=sub_color,
                             ),
                             ft.Text(
-                                f"Nitrógeno: {vals[3]:.0f}   Fósforo: {vals[4]:.0f}",
+                                f"Nitrogeno: {vals[3]:.0f}   Fosforo: {vals[4]:.0f}",
                                 size=11,
                                 color=sub_color,
                             ),
@@ -405,17 +413,103 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
             on_click=lambda e, m=mid, v=vals, img=imagen, f=fecha, h=hora: open_detail_dialog(m, v, img, f, h),
         )
 
+    def parse_measurement_row(row):
+        mid, timestamp, sensor_json, imagen = row
+
+        try:
+            data = json.loads(sensor_json)
+            vals = get_values(data)
+        except Exception:
+            vals = [0.0] * 9
+
+        try:
+            dt = datetime.fromisoformat(timestamp)
+            fecha = dt.strftime("%d/%m/%Y")
+            hora = dt.strftime("%H:%M")
+        except Exception:
+            fecha = timestamp[:10] if timestamp else ""
+            hora = timestamp[11:16] if timestamp and len(timestamp) > 16 else ""
+
+        return mid, fecha, hora, vals, imagen
+
+    def finca_key(finca_id, finca_nombre_item):
+        return finca_id if finca_id is not None else f"sin_finca:{finca_nombre_item}"
+
+    def build_finca_section(key, finca_nombre_item, rows, expanded=False):
+        cards = []
+        for row in rows:
+            mid, fecha, hora, vals, imagen = parse_measurement_row(row)
+            cards.append(hacer_card(mid, fecha, hora, vals, imagen))
+
+        def on_select_finca(e):
+            if e.control.value:
+                selected_finca_keys.add(key)
+            else:
+                selected_finca_keys.discard(key)
+            export_status.visible = False
+            page.update()
+
+        return ft.Container(
+            content=ft.ExpansionTile(
+                title=ft.Text(
+                    finca_nombre_item,
+                    size=14,
+                    weight=ft.FontWeight.BOLD,
+                    color=text_color,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1,
+                ),
+                subtitle=ft.Text(
+                    f"{len(rows)} medicion{'es' if len(rows) != 1 else ''}",
+                    size=11,
+                    color=sub_color,
+                ),
+                leading=ft.Checkbox(
+                    value=key in selected_finca_keys,
+                    on_change=on_select_finca,
+                    active_color=accent,
+                    check_color="#FFFFFF",
+                ),
+                controls=cards,
+                controls_padding=ft.Padding.only(left=10, right=10, bottom=10),
+                tile_padding=ft.Padding.symmetric(horizontal=12, vertical=4),
+                expanded_cross_axis_alignment=ft.CrossAxisAlignment.STRETCH,
+                collapsed_bgcolor=card_bg,
+                bgcolor=card_bg,
+                text_color=text_color,
+                collapsed_text_color=text_color,
+                icon_color=accent,
+                collapsed_icon_color=sub_color,
+                expanded=expanded,
+                maintain_state=True,
+            ),
+            bgcolor=card_bg,
+            border_radius=12,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            border=ft.Border.all(1, detail_table_border),
+        )
+
     async def export_csv():
-        finca_id = state.get("finca_id")
-        rows = get_measurements_by_finca(finca_id)
+        all_rows_with_finca = get_all_measurements_with_finca() if viewing_all else []
+        if viewing_all:
+            if not selected_finca_keys:
+                show_export_status("Selecciona al menos una finca", "#FF9800")
+                return
+            rows = [
+                row for row in all_rows_with_finca
+                if finca_key(row[0], row[1]) in selected_finca_keys
+            ]
+        else:
+            rows = get_measurements_by_finca(selected_finca_id)
 
         if not rows:
-            show_export_status("No hay datos para enviar en esta finca", "#FF9800")
+            show_export_status("No hay datos para enviar", "#FF9800")
             return
 
+        export_name = "fincas_seleccionadas" if viewing_all else finca_nombre
         safe_finca = "".join(
             c if c.isalnum() or c in ("_", "-") else "_"
-            for c in (finca_nombre or "finca")
+            for c in (export_name or "finca")
         )
         file_name = (
             f"agrosense_historial_{safe_finca}_"
@@ -433,16 +527,25 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                 return ""
 
         try:
-            with open(target_path, "w", encoding="utf-8-sig", newline="") as csv_file:
+            with open(target_path, "w", encoding="utf-8", newline="") as csv_file:
                 writer = csv.writer(csv_file, delimiter=";")
-                writer.writerow([
-                    "No. Medición",
+                header_row = [
+                    "No. Medicion",
+                    *([] if not viewing_all else ["Finca"]),
                     "Fecha",
                     "Hora",
                     *[label for label, _ in EXPORT_COLUMNS],
-                ])
+                ]
+                writer.writerow(header_row)
 
-                for numero, (_, timestamp, sensor_json, _) in enumerate(reversed(rows), start=1):
+                iterable_rows = reversed(rows)
+                for numero, row in enumerate(iterable_rows, start=1):
+                    if viewing_all:
+                        _, finca_item_nombre, _, timestamp, sensor_json, _ = row
+                    else:
+                        finca_item_nombre = ""
+                        _, timestamp, sensor_json, _ = row
+
                     try:
                         data = json.loads(sensor_json)
                     except Exception:
@@ -457,12 +560,14 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                         fecha = timestamp[:10] if timestamp else ""
                         hora = timestamp[11:19] if timestamp and len(timestamp) >= 19 else ""
 
-                    writer.writerow([
+                    data_row = [
                         numero,
+                        *([] if not viewing_all else [finca_item_nombre]),
                         fecha,
                         hora,
                         *[format_num(vals[idx], 2) for _, idx in EXPORT_COLUMNS],
-                    ])
+                    ]
+                    writer.writerow(data_row)
         except Exception as ex:
             show_export_status(f"No se pudo generar el archivo: {ex}", "#F44336")
             return
@@ -485,16 +590,22 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                 ft.IconButton(
                     icon=ft.Icons.ARROW_BACK,
                     icon_color=text_color,
-                    on_click=lambda _: navigate("/dashboard"),
+                    on_click=lambda _: navigate("/dashboard" if state.get("ble_mode") else "/connection"),
                 ),
                 ft.Text("Historial", size=18, weight=ft.FontWeight.BOLD, color=text_color),
                 ft.Container(expand=True),
-                ft.IconButton(
-                    icon=ft.Icons.BLUETOOTH_DISABLED,
-                    icon_color="#F44336",
-                    icon_size=18,
-                    tooltip="Desconectar Bluetooth",
-                    on_click=disconnect_ble,
+                *(
+                    [
+                        ft.IconButton(
+                            icon=ft.Icons.BLUETOOTH_DISABLED,
+                            icon_color="#F44336",
+                            icon_size=18,
+                            tooltip="Desconectar Bluetooth",
+                            on_click=disconnect_ble,
+                        )
+                    ]
+                    if state.get("ble_mode")
+                    else []
                 ),
                 ft.Container(
                     content=ft.Row(
@@ -515,7 +626,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                     bgcolor="#4CAF5026",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-                    max_width=130,
+                    width=130,
                     clip_behavior=ft.ClipBehavior.HARD_EDGE,
                 ),
             ],
@@ -550,7 +661,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
     content_col = ft.Column([], spacing=8)
 
     def do_load():
-        rows = get_measurements_by_finca(state.get("finca_id"))
+        rows = get_all_measurements_with_finca() if viewing_all else get_measurements_by_finca(selected_finca_id)
         content_col.controls.clear()
 
         if not rows:
@@ -562,7 +673,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                                 [
                                     ft.Icon(ft.Icons.FOLDER_OPEN, size=48, color=sub_color),
                                     ft.Text("No hay mediciones guardadas", size=14, color=sub_color),
-                                    ft.Text("Mide desde el dashboard", size=12, color=sub_color),
+                                    ft.Text("Conecta el equipo para nuevas mediciones", size=12, color=sub_color),
                                 ],
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
@@ -574,28 +685,28 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                 )
             )
         else:
-            cards = []
-            for row in rows:
-                mid, timestamp, sensor_json, imagen = row
+            if viewing_all:
+                grouped_rows = []
+                for finca_id, finca_item_nombre, mid, timestamp, sensor_json, imagen in rows:
+                    key = finca_key(finca_id, finca_item_nombre)
+                    if not grouped_rows or grouped_rows[-1][0] != key:
+                        grouped_rows.append((key, finca_item_nombre, []))
+                    grouped_rows[-1][2].append((mid, timestamp, sensor_json, imagen))
 
-                try:
-                    data = json.loads(sensor_json)
-                    vals = get_values(data)
-                except Exception:
-                    vals = [0.0] * 9
-
-                try:
-                    dt    = datetime.fromisoformat(timestamp)
-                    fecha = dt.strftime("%d/%m/%Y")
-                    hora  = dt.strftime("%H:%M")
-                except Exception:
-                    fecha = timestamp[:10] if timestamp else ""
-                    hora  = timestamp[11:16] if len(timestamp) > 16 else ""
-
-                cards.append(hacer_card(mid, fecha, hora, vals, imagen))
-
-            for card in cards:
-                content_col.controls.append(card)
+                expand_single = len(grouped_rows) == 1
+                for key, finca_item_nombre, finca_rows in grouped_rows:
+                    content_col.controls.append(
+                        build_finca_section(
+                            key,
+                            finca_item_nombre,
+                            finca_rows,
+                            expanded=expand_single,
+                        )
+                    )
+            else:
+                for row in rows:
+                    mid, fecha, hora, vals, imagen = parse_measurement_row(row)
+                    content_col.controls.append(hacer_card(mid, fecha, hora, vals, imagen))
 
         page.update()
 

@@ -175,6 +175,11 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
     def on_connect_click(_):
         page.run_task(connect_ble_with_permissions)
 
+    def on_history_click(_):
+        state["finca_id"] = None
+        state["finca_nombre"] = None
+        navigate("/history")
+
     header = ft.Container(
         content=ft.Row(
             [
@@ -186,6 +191,12 @@ def build(page: ft.Page, ble: BLEService, state, navigate, is_dark):
                     color=txt,
                 ),
                 ft.Container(expand=True),
+                ft.IconButton(
+                    icon=ft.Icons.HISTORY,
+                    icon_color=sub,
+                    tooltip="Ver historial",
+                    on_click=on_history_click,
+                ),
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),

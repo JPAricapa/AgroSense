@@ -15,8 +15,8 @@ SENSOR_TABLE = [
     ("Hum. Suelo", "%", 1),
     ("pH", "", 2),
     ("EC", "dS/m", 6),
-    ("Nitrógeno", "mg/kg", 3),
-    ("Fósforo", "mg/kg", 4),
+    ("Nitrogeno", "mg/kg", 3),
+    ("Fosforo", "mg/kg", 4),
     ("Potasio", "mg/kg", 5),
 ]
 
@@ -171,7 +171,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble):
                     bgcolor="#4CAF5026",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-                    max_width=130,
+                    width=130,
                     clip_behavior=ft.ClipBehavior.HARD_EDGE,
                 ),
             ],

@@ -17,8 +17,10 @@ AgroSense permite:
 - Seleccionar una finca antes de guardar lecturas.
 - Visualizar mediciones en tiempo real en el dashboard.
 - Guardar mediciones con foto del cultivo.
-- Consultar el historial de mediciones.
-- Exportar el historial en formato CSV.
+- Consultar el historial de mediciones sin necesidad de conectarse al equipo.
+- Revisar el historial agrupado por finca.
+- Exportar el historial en formato CSV, seleccionando las fincas que se quieren compartir.
+- Mostrar icono y pantalla de inicio con la identidad de AgroSense.
 
 ## Tecnologías usadas
 
@@ -61,6 +63,19 @@ AgroSense permite:
 5. Inicia la medición desde el dashboard.
 6. Guarda la lectura y, si quiere, adjunta una foto.
 7. Consulta el historial o exporta los datos a CSV.
+
+El historial tambien se puede abrir desde la pantalla de conexion usando el icono superior de historial. En ese modo no hace falta estar conectado por BLE.
+
+## Historial y exportacion CSV
+
+El historial tiene dos comportamientos:
+
+- Desde una finca seleccionada: muestra y exporta solo las mediciones de esa finca.
+- Desde la pantalla de conexion: muestra las mediciones agrupadas por finca.
+
+Cuando el historial se abre desde la pantalla de conexion, cada finca tiene una casilla de seleccion. El boton `Enviar datos` exporta unicamente las fincas seleccionadas. Si no hay ninguna finca marcada, la app muestra el aviso `Selecciona al menos una finca`.
+
+El CSV se genera con separador `;`, encabezados sin tildes para evitar problemas de compatibilidad y codificacion `UTF-8` sin BOM. La primera columna es `No. Medicion`. Cuando se exporta mas de una finca, el archivo incluye la columna `Finca`.
 
 ## Entorno virtual
 
@@ -122,12 +137,21 @@ El APK generado queda en:
 build/apk/agrosense.apk
 ```
 
+Este es el flujo recomendado para instalar en el celular, porque conserva el soporte BLE de Android.
+
 ## Instalación manual por ADB
 
 Si tienes un dispositivo Android conectado por USB o ADB inalámbrico:
 
 ```bash
 adb install -r build/apk/agrosense.apk
+```
+
+Si hay mas de un dispositivo conectado:
+
+```bash
+adb devices
+adb -s ID_DEL_DISPOSITIVO install -r build/apk/agrosense.apk
 ```
 
 ## Validación rápida antes de compilar
@@ -173,7 +197,7 @@ Importante:
 - `fincas.py`: selección y creación de fincas.
 - `dashboard.py`: visualización de valores en tiempo real.
 - `save.py`: guardado de la medición y captura o carga de imagen.
-- `history.py`: consulta del historial y exportación CSV.
+- `history.py`: consulta del historial, agrupación por finca y exportación CSV selectiva.
 
 ## Notas de trabajo
 
@@ -195,10 +219,16 @@ No conviene versionar estos artefactos:
 
 El nombre visible actual de la aplicación es `AgroSense`.
 
-La configuración principal del nombre del proyecto y del producto Android está definida en [pyproject.toml](/home/juan-pablo/SEMINARIO/seminario_flet/pyproject.toml):
+La configuración principal del nombre del proyecto y del producto Android está definida en `pyproject.toml`:
 
 - `project.name = "agrosense"`
 - `tool.flet.product = "AgroSense"`
 - `tool.flet.company = "AgroSense"`
 - `tool.flet.org = "com.agrosense"`
 
+Los assets principales usados por el empaquetado de Flet estan en `assets/`:
+
+- `icon.png`
+- `icon_android.png`
+- `splash.png`
+- `splash_android.png`

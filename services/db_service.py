@@ -107,6 +107,35 @@ def get_measurements_by_finca(finca_id):
     return rows
 
 
+def get_all_measurements():
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT id, timestamp, sensor_json, imagen
+        FROM measurements
+        ORDER BY id DESC
+    """).fetchall()
+    conn.close()
+    return rows
+
+
+def get_all_measurements_with_finca():
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute("""
+        SELECT
+            m.finca_id,
+            COALESCE(f.nombre, 'Sin finca') AS finca_nombre,
+            m.id,
+            m.timestamp,
+            m.sensor_json,
+            m.imagen
+        FROM measurements m
+        LEFT JOIN fincas f ON f.id = m.finca_id
+        ORDER BY finca_nombre COLLATE NOCASE ASC, m.id DESC
+    """).fetchall()
+    conn.close()
+    return rows
+
+
 def delete_measurement(mid: int):
     conn = sqlite3.connect(DB_PATH)
     conn.execute("DELETE FROM measurements WHERE id = ?", (mid,))

@@ -6,10 +6,10 @@ SENSOR_LABELS = [
     ("Temperatura", "C", "#EF5350"),
     ("Humedad", "%", "#26A69A"),
     ("pH", "", "#26C6DA"),
-    ("Nitrógeno", "mg/kg", "#66BB6A"),
-    ("Fósforo", "mg/kg", "#9CCC65"),
+    ("Nitrogeno", "mg/kg", "#66BB6A"),
+    ("Fosforo", "mg/kg", "#9CCC65"),
     ("Potasio", "mg/kg", "#CE93D8"),
-    ("EC", "dS/m", "#4DB6AC"),
+    ("EC", "uS/cm", "#4DB6AC"),
     ("Temperatura", "C", "#FFA726"),
     ("Humedad", "%", "#B39DDB"),
 ]
@@ -30,6 +30,13 @@ def get_values(data):
         am.get("temperature_air", 0),
         am.get("humidity_air", 0),
     ]
+
+
+def _format_number(value):
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "-"
 
 
 def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, ble=None):
@@ -72,7 +79,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
 
         vals = get_values(data)
         for i, v in enumerate(vals):
-            card_values[i].value = f"{v:.2f}"
+            card_values[i].value = _format_number(v)
 
         timestamp_text.value = _format_timestamp(data.get("timestamp", ""))
         _update_save_button_visibility()
@@ -141,7 +148,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
                     bgcolor="#4CAF5026",
                     border_radius=6,
                     padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-                    max_width=130,
+                    width=130,
                     clip_behavior=ft.ClipBehavior.HARD_EDGE,
                 ),
             ],
@@ -166,18 +173,19 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
 
     for label, unit, color in SENSOR_LABELS:
         val_text = ft.Text("-", size=20, weight=ft.FontWeight.BOLD, color=color)
+        label_text = f"{label} ({unit})" if unit else label
         card = ft.Container(
             content=ft.Column(
                 [
                     val_text,
-                    ft.Text(label, size=11, color=sub_color, text_align=ft.TextAlign.CENTER),
+                    ft.Text(label_text, size=11, color=sub_color, text_align=ft.TextAlign.CENTER),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=1,
             ),
             bgcolor=card_tint,
             border_radius=14,
-            border=ft.border.all(1, card_border),
+            border=ft.Border.all(1, card_border),
             padding=10,
             width=140,
         )
@@ -188,7 +196,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
         data = state["current_data"]
         vals = get_values(data)
         for i, v in enumerate(vals):
-            card_values[i].value = f"{v:.2f}"
+            card_values[i].value = _format_number(v)
         timestamp_text.value = _format_timestamp(data.get("timestamp", ""))
 
     row1 = ft.Row(card_containers[0:2], alignment=ft.MainAxisAlignment.CENTER, spacing=8)
@@ -230,7 +238,7 @@ def build(page: ft.Page, state: dict, navigate, is_dark: bool, disconnect_ble, b
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             padding=12,
-            border=ft.border.all(1, section_border),
+            border=ft.Border.all(1, section_border),
             border_radius=18,
             bgcolor=card_bg,
             shadow=ft.BoxShadow(

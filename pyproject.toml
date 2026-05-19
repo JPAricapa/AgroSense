@@ -17,11 +17,16 @@ product = "AgroSense"
 company = "AgroSense"
 permissions = ["camera"]
 
+[tool.flet.splash]
+color = "#0D1B2A"
+dark_color = "#0D1B2A"
+
 [tool.flet.app]
 path = "."
 
 [tool.flet.android]
 min_sdk_version = 24
+adaptive_icon_background = "#0D1B2A"
 dependencies = [
   "flet-camera",
   "flet-permission-handler",
