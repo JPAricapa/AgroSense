@@ -46,11 +46,10 @@ AgroSense permite:
 ├── services/
 │   ├── ble_service.py
 │   └── db_service.py
-├── android/
 ├── scripts/
 │   └── build_ble_apk.sh
-├── Configuraciones_hibernacion/
-│   └── Configuraciones_hibernacion.ino
+├── AgroSense_Firmware/
+│   └── AgroSense_Firmware.ino
 └── README.md
 ```
 
@@ -159,7 +158,7 @@ adb -s ID_DEL_DISPOSITIVO install -r build/apk/agrosense.apk
 Para verificar la sintaxis del proyecto:
 
 ```bash
-python -m py_compile main.py pages/*.py services/*.py android/*.py
+python -m py_compile main.py pages/*.py services/*.py
 ```
 
 ## Base de datos local
@@ -176,7 +175,7 @@ La base de datos no debe subirse al repositorio.
 El firmware principal está en:
 
 ```text
-Configuraciones_hibernacion/Configuraciones_hibernacion.ino
+AgroSense_Firmware/AgroSense_Firmware.ino
 ```
 
 Ese sketch controla:
@@ -215,20 +214,10 @@ No conviene versionar estos artefactos:
 - Archivos `__pycache__/`.
 - Datos capturados o exportados durante pruebas.
 
-## Nombre del producto
+## Créditos
 
-El nombre visible actual de la aplicación es `AgroSense`.
-
-La configuración principal del nombre del proyecto y del producto Android está definida en `pyproject.toml`:
-
-- `project.name = "agrosense"`
-- `tool.flet.product = "AgroSense"`
-- `tool.flet.company = "AgroSense"`
-- `tool.flet.org = "com.agrosense"`
-
-Los assets principales usados por el empaquetado de Flet estan en `assets/`:
-
-- `icon.png`
-- `icon_android.png`
-- `splash.png`
-- `splash_android.png`
+Este proyecto fue diseñado e implementado por Juan Pablo Aricapa Bedoya,
+María José Colorado Morales, Juan Pablo Mahecha Ocampo e Ivan Diaz Zuluaga,
+en el marco del Seminario de Grado Sistemas de agentes distribuidos para
+Agricultura de precisión, con el acompañamiento de los profesores Jaime Alberto
+Buitrago y Luis Miguel Capacho.

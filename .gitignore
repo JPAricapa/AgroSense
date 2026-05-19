@@ -1,8 +1,11 @@
 # Build
 build/
+*.apk
+*.aab
 
 # Base de datos local
 services/.agroprecision/
+*.db
 
 # Python
 __pycache__/
@@ -11,8 +14,9 @@ __pycache__/
 .venv/
 venv/
 
-# Archivos temporales de Flet (sockets, PID)
-35iNWmCScaHSQgGQ9N1u
+# Archivos temporales de Flet y datos capturados en pruebas
+.flet/
+uploads/
 
 # IDE
 .idea/
